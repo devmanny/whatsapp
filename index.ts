@@ -38,6 +38,7 @@ cleanChromiumLocks('/app/.wwebjs_auth');
 cleanChromiumLocks('/app/.wwebjs_cache');
 console.log('Lock cleanup complete');
 
+console.log('Creating WhatsApp client...');
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -48,17 +49,15 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process',
             '--disable-gpu',
             '--disable-software-rasterizer',
-            '--disable-extensions',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding'
+            '--disable-extensions'
         ],
-        headless: true
+        headless: true,
+        timeout: 60000
     }
 });
+console.log('Client created successfully');
 
 interface ZodiacSign {
     emoji: string;
@@ -141,13 +140,17 @@ function detectZodiacSigns(text: string): string[] {
         .map(m => m.emoji);
 }
 
+client.on('loading_screen', (percent, message) => {
+    console.log(`Loading: ${percent}% - ${message}`);
+});
+
 client.on('qr', (qr) => {
     console.log('QR RECEIVED');
     console.log(qr);
 });
 
 client.on('ready', () => {
-    console.log('Client is ready!');
+    console.log('✓ Client is ready!');
 });
 
 client.on('message', async (msg) => {
@@ -175,16 +178,21 @@ client.on('message_create', async (msg) => {
 });
 
 client.on('authenticated', () => {
-    console.log('AUTHENTICATED');
+    console.log('✓ AUTHENTICATED');
 });
 
 client.on('auth_failure', () => {
-    console.log('AUTHENTICATION FAILURE');
+    console.log('✗ AUTHENTICATION FAILURE');
 });
 
 client.on('disconnected', (reason) => {
-    console.log('Client was logged out', reason);
+    console.log('✗ Client was logged out:', reason);
 });
 
 console.log('Initializing WhatsApp client...');
-client.initialize();
+client.initialize().then(() => {
+    console.log('Initialize complete');
+}).catch(error => {
+    console.error('Initialize failed:', error);
+    process.exit(1);
+});
