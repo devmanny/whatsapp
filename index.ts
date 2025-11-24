@@ -1,21 +1,42 @@
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
-import { unlinkSync, existsSync, readdirSync } from 'fs';
+import { unlinkSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-const AUTH_DIR = '/app/.wwebjs_auth';
-const LOCK_FILES = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+function cleanChromiumLocks(dir: string) {
+    if (!existsSync(dir)) {
+        console.log(`Creating auth directory: ${dir}`);
+        mkdirSync(dir, { recursive: true });
+        return;
+    }
 
-for (const lockFile of LOCK_FILES) {
-    const lockPath = join(AUTH_DIR, lockFile);
-    if (existsSync(lockPath)) {
-        console.log(`Removing stale lock: ${lockFile}...`);
-        try {
-            unlinkSync(lockPath);
-        } catch (error) {
-            console.warn(`Could not remove ${lockFile}:`, error);
+    const lockPatterns = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+
+    try {
+        const entries = readdirSync(dir, { withFileTypes: true });
+
+        for (const entry of entries) {
+            const fullPath = join(dir, entry.name);
+
+            if (entry.isDirectory()) {
+                cleanChromiumLocks(fullPath);
+            } else if (lockPatterns.some(pattern => entry.name.includes(pattern))) {
+                console.log(`Removing stale lock: ${entry.name} from ${dir}`);
+                try {
+                    unlinkSync(fullPath);
+                } catch (err) {
+                    console.warn(`Failed to remove ${entry.name}:`, err);
+                }
+            }
         }
+    } catch (error) {
+        console.warn(`Error cleaning locks in ${dir}:`, error);
     }
 }
+
+console.log('Cleaning Chromium profile locks...');
+cleanChromiumLocks('/app/.wwebjs_auth');
+cleanChromiumLocks('/app/.wwebjs_cache');
+console.log('Lock cleanup complete');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -27,10 +48,15 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
+            '--single-process',
             '--disable-gpu',
             '--disable-software-rasterizer',
-            '--disable-extensions'
-        ]
+            '--disable-extensions',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding'
+        ],
+        headless: true
     }
 });
 
