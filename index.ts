@@ -1,4 +1,4 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -15,6 +15,28 @@ const client = new Client({
     }
 });
 
+function getMexicoCityTime(): string {
+    return new Date().toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+async function logMessage(msg: Message, type: 'RECIBIDO' | 'ENVIADO') {
+    const contact = await msg.getContact();
+    const name = contact.pushname || contact.name || 'Sin nombre';
+    const number = msg.from;
+    const time = getMexicoCityTime();
+
+    console.log(`[${time}] [${type}] ${name} (${number}): ${msg.body}`);
+}
+
 client.on('qr', (qr) => {
     console.log('QR RECEIVED');
     console.log(qr);
@@ -25,10 +47,16 @@ client.on('ready', () => {
 });
 
 client.on('message', async (msg) => {
-    console.log('MESSAGE RECEIVED', msg.body);
+    await logMessage(msg, 'RECIBIDO');
 
     if (msg.body === '!ping') {
         await msg.reply('pong');
+    }
+});
+
+client.on('message_create', async (msg) => {
+    if (msg.fromMe) {
+        await logMessage(msg, 'ENVIADO');
     }
 });
 
