@@ -1,4 +1,21 @@
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
+import { unlinkSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
+
+const AUTH_DIR = '/app/.wwebjs_auth';
+const LOCK_FILES = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+
+for (const lockFile of LOCK_FILES) {
+    const lockPath = join(AUTH_DIR, lockFile);
+    if (existsSync(lockPath)) {
+        console.log(`Removing stale lock: ${lockFile}...`);
+        try {
+            unlinkSync(lockPath);
+        } catch (error) {
+            console.warn(`Could not remove ${lockFile}:`, error);
+        }
+    }
+}
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -10,7 +27,9 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--disable-extensions'
         ]
     }
 });
@@ -62,7 +81,17 @@ async function logMessage(msg: Message, type: 'RECIBIDO' | 'ENVIADO') {
     const number = msg.from;
     const time = getMexicoCityTime();
 
-    console.log(`[${time}] [${type}] ${name} (${number}): ${msg.body}`);
+    let messageContent = msg.body;
+
+    if (!messageContent || messageContent.trim() === '') {
+        if (msg.hasMedia) {
+            messageContent = `[${msg.type.toUpperCase()}]`;
+        } else {
+            return;
+        }
+    }
+
+    console.log(`[${time}] [${type}] ${name} (${number}): ${messageContent}`);
 }
 
 function detectZodiacSigns(text: string): string[] {
@@ -97,6 +126,10 @@ client.on('ready', () => {
 
 client.on('message', async (msg) => {
     await logMessage(msg, 'RECIBIDO');
+
+    if (!msg.body || msg.body.trim() === '') {
+        return;
+    }
 
     if (msg.body === '!ping') {
         await msg.reply('pong');
