@@ -24,6 +24,12 @@ RUN bun install --frozen-lockfile
 # Copy application files
 COPY . .
 
+# Create directory for WhatsApp session data
+RUN mkdir -p /app/.wwebjs_auth /app/.wwebjs_cache
+
+# Define volume for persistent WhatsApp session
+VOLUME ["/app/.wwebjs_auth"]
+
 # Expose port (if needed for API)
 EXPOSE 3000
 
