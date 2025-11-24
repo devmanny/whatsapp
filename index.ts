@@ -15,6 +15,25 @@ const client = new Client({
     }
 });
 
+const zodiacSigns: Record<string, string> = {
+    'aries': '♈',
+    'tauro': '♉',
+    'géminis': '♊',
+    'geminis': '♊',
+    'cáncer': '♋',
+    'cancer': '♋',
+    'leo': '♌',
+    'virgo': '♍',
+    'libra': '♎',
+    'escorpio': '♏',
+    'escorpión': '♏',
+    'escorpion': '♏',
+    'sagitario': '♐',
+    'capricornio': '♑',
+    'acuario': '♒',
+    'piscis': '♓'
+};
+
 function getMexicoCityTime(): string {
     return new Date().toLocaleString('es-MX', {
         timeZone: 'America/Mexico_City',
@@ -37,6 +56,19 @@ async function logMessage(msg: Message, type: 'RECIBIDO' | 'ENVIADO') {
     console.log(`[${time}] [${type}] ${name} (${number}): ${msg.body}`);
 }
 
+function detectZodiacSign(text: string): string | null {
+    const normalizedText = text.toLowerCase();
+
+    for (const [sign, emoji] of Object.entries(zodiacSigns)) {
+        const regex = new RegExp(`\\b${sign}\\b`, 'i');
+        if (regex.test(normalizedText)) {
+            return emoji;
+        }
+    }
+
+    return null;
+}
+
 client.on('qr', (qr) => {
     console.log('QR RECEIVED');
     console.log(qr);
@@ -51,6 +83,12 @@ client.on('message', async (msg) => {
 
     if (msg.body === '!ping') {
         await msg.reply('pong');
+        return;
+    }
+
+    const zodiacEmoji = detectZodiacSign(msg.body);
+    if (zodiacEmoji) {
+        await msg.reply(zodiacEmoji);
     }
 });
 
