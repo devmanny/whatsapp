@@ -15,24 +15,33 @@ const client = new Client({
     }
 });
 
-const zodiacSigns: Record<string, string> = {
-    'aries': '♈',
-    'tauro': '♉',
-    'géminis': '♊',
-    'geminis': '♊',
-    'cáncer': '♋',
-    'cancer': '♋',
-    'leo': '♌',
-    'virgo': '♍',
-    'libra': '♎',
-    'escorpio': '♏',
-    'escorpión': '♏',
-    'escorpion': '♏',
-    'sagitario': '♐',
-    'capricornio': '♑',
-    'acuario': '♒',
-    'piscis': '♓'
-};
+interface ZodiacSign {
+    emoji: string;
+    patterns: string[];
+    compiledRegex: RegExp;
+}
+
+const zodiacSigns: ZodiacSign[] = [
+    { emoji: '♈', patterns: ['aries'], compiledRegex: /\b(aries)\b/i },
+    { emoji: '♉', patterns: ['tauro', 'tauros'], compiledRegex: /\b(tauros?)\b/i },
+    { emoji: '♊', patterns: ['géminis', 'geminis', 'gémini', 'gemini'], compiledRegex: /\b(g[eé]minis?)\b/i },
+    { emoji: '♋', patterns: ['cáncer', 'cancer'], compiledRegex: /\b(c[aá]ncer)\b/i },
+    { emoji: '♌', patterns: ['leo', 'leos'], compiledRegex: /\b(leos?)\b/i },
+    { emoji: '♍', patterns: ['virgo', 'virgos'], compiledRegex: /\b(virgos?)\b/i },
+    { emoji: '♎', patterns: ['libra', 'libras'], compiledRegex: /\b(libras?)\b/i },
+    { emoji: '♏', patterns: ['escorpio', 'escorpión', 'escorpion', 'escorpios'], compiledRegex: /\b(escorpi[oó]n?(?:es)?|escorpios?)\b/i },
+    { emoji: '♐', patterns: ['sagitario', 'sagitarios'], compiledRegex: /\b(sagitarios?)\b/i },
+    { emoji: '♑', patterns: ['capricornio', 'capricornios'], compiledRegex: /\b(capricornios?)\b/i },
+    { emoji: '♒', patterns: ['acuario', 'acuarios'], compiledRegex: /\b(acuarios?)\b/i },
+    { emoji: '♓', patterns: ['piscis'], compiledRegex: /\b(piscis)\b/i }
+];
+
+function normalizeText(text: string): string {
+    return text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
 
 function getMexicoCityTime(): string {
     return new Date().toLocaleString('es-MX', {
@@ -56,17 +65,25 @@ async function logMessage(msg: Message, type: 'RECIBIDO' | 'ENVIADO') {
     console.log(`[${time}] [${type}] ${name} (${number}): ${msg.body}`);
 }
 
-function detectZodiacSign(text: string): string | null {
-    const normalizedText = text.toLowerCase();
+function detectZodiacSigns(text: string): string[] {
+    const foundEmojis = new Set<string>();
+    const matches: Array<{ emoji: string; index: number }> = [];
 
-    for (const [sign, emoji] of Object.entries(zodiacSigns)) {
-        const regex = new RegExp(`\\b${sign}\\b`, 'i');
-        if (regex.test(normalizedText)) {
-            return emoji;
+    for (const sign of zodiacSigns) {
+        let match: RegExpExecArray | null;
+        const regex = new RegExp(sign.compiledRegex.source, 'gi');
+
+        while ((match = regex.exec(text)) !== null) {
+            if (!foundEmojis.has(sign.emoji)) {
+                matches.push({ emoji: sign.emoji, index: match.index });
+                foundEmojis.add(sign.emoji);
+            }
         }
     }
 
-    return null;
+    return matches
+        .sort((a, b) => a.index - b.index)
+        .map(m => m.emoji);
 }
 
 client.on('qr', (qr) => {
@@ -86,9 +103,9 @@ client.on('message', async (msg) => {
         return;
     }
 
-    const zodiacEmoji = detectZodiacSign(msg.body);
-    if (zodiacEmoji) {
-        await msg.reply(zodiacEmoji);
+    const zodiacEmojis = detectZodiacSigns(msg.body);
+    if (zodiacEmojis.length > 0) {
+        await msg.reply(zodiacEmojis.join(' '));
     }
 });
 
