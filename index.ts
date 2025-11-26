@@ -146,22 +146,35 @@ function getMexicoCityTime(): string {
 }
 
 async function logMessage(msg: Message, type: 'RECIBIDO' | 'ENVIADO') {
-    const contact = await msg.getContact();
-    const name = contact.pushname || contact.name || 'Sin nombre';
-    const number = msg.from;
-    const time = getMexicoCityTime();
+    try {
+        let name = 'Unknown';
+        const number = msg.from || 'Unknown';
+        const time = getMexicoCityTime();
 
-    let messageContent = msg.body;
-
-    if (!messageContent || messageContent.trim() === '') {
-        if (msg.hasMedia) {
-            messageContent = `[${msg.type.toUpperCase()}]`;
-        } else {
-            return;
+        try {
+            const contact = await msg.getContact();
+            name = contact.pushname || contact.name || 'Sin nombre';
+        } catch (contactError) {
+            // WhatsApp Web API changed - getContact may fail
+            // Fall back to using the number as the name
+            name = number;
         }
-    }
 
-    console.log(`[${time}] [${type}] ${name} (${number}): ${messageContent}`);
+        let messageContent = msg.body;
+
+        if (!messageContent || messageContent.trim() === '') {
+            if (msg.hasMedia) {
+                messageContent = `[${msg.type.toUpperCase()}]`;
+            } else {
+                return;
+            }
+        }
+
+        console.log(`[${time}] [${type}] ${name} (${number}): ${messageContent}`);
+    } catch (error) {
+        // Don't let logging errors crash the bot
+        console.error('Error logging message:', error);
+    }
 }
 
 function detectZodiacSigns(text: string): string[] {
