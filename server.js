@@ -6,11 +6,74 @@ const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu'
+    ]
   }
 });
 
 let isReady = false;
+
+// Zodiac signs mapping
+const zodiacSigns = {
+  'aries': '♈',
+  'tauro': '♉',
+  'géminis': '♊',
+  'geminis': '♊',
+  'cáncer': '♋',
+  'cancer': '♋',
+  'leo': '♌',
+  'virgo': '♍',
+  'libra': '♎',
+  'escorpio': '♏',
+  'escorpión': '♏',
+  'escorpion': '♏',
+  'sagitario': '♐',
+  'capricornio': '♑',
+  'acuario': '♒',
+  'piscis': '♓'
+};
+
+// Get Mexico City time for logging
+function getMexicoCityTime() {
+  return new Date().toLocaleString('es-MX', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+}
+
+// Log messages with contact info
+async function logMessage(msg, type) {
+  const contact = await msg.getContact();
+  const name = contact.pushname || contact.name || 'Sin nombre';
+  const number = msg.from;
+  const time = getMexicoCityTime();
+  console.log(`[${time}] [${type}] ${name} (${number}): ${msg.body}`);
+}
+
+// Detect zodiac sign in text
+function detectZodiacSign(text) {
+  const normalizedText = text.toLowerCase();
+  for (const [sign, emoji] of Object.entries(zodiacSigns)) {
+    const regex = new RegExp(`\\b${sign}\\b`, 'i');
+    if (regex.test(normalizedText)) {
+      return emoji;
+    }
+  }
+  return null;
+}
 
 // Generate QR code for authentication
 client.on('qr', (qr) => {
@@ -34,6 +97,30 @@ client.on('auth_failure', (msg) => {
 client.on('disconnected', (reason) => {
   isReady = false;
   console.log('WhatsApp client disconnected:', reason);
+});
+
+// Handle incoming messages - zodiac sign detection
+client.on('message', async (msg) => {
+  await logMessage(msg, 'RECIBIDO');
+
+  // Ping command
+  if (msg.body === '!ping') {
+    await msg.reply('pong');
+    return;
+  }
+
+  // Zodiac sign detection
+  const zodiacEmoji = detectZodiacSign(msg.body);
+  if (zodiacEmoji) {
+    await msg.reply(zodiacEmoji);
+  }
+});
+
+// Log outgoing messages
+client.on('message_create', async (msg) => {
+  if (msg.fromMe) {
+    await logMessage(msg, 'ENVIADO');
+  }
 });
 
 // Initialize WhatsApp client
@@ -82,7 +169,6 @@ const server = Bun.serve({
         }
 
         // Format phone number (add @c.us suffix for WhatsApp)
-        // Remove any non-numeric characters and add country code if needed
         const cleanNumber = target.replace(/\D/g, '');
         const chatId = `${cleanNumber}@c.us`;
 
