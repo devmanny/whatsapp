@@ -3,6 +3,13 @@
 	"version": "0.1.3",
 	"description": "Unofficial WhatsApp client for Mac",
 	"main": "main.js",
+	"scripts": {
+		"server": "bun run server.js"
+	},
+	"dependencies": {
+		"whatsapp-web.js": "^1.23.0",
+		"qrcode-terminal": "^0.12.0"
+	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/anatolinicolae/whatsapp"
