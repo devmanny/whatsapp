@@ -4,6 +4,7 @@ import { join } from 'path';
 
 let client: Client | null = null;
 let isShuttingDown = false;
+let isReady = false;
 let initializationAttempt = 0;
 const MAX_RETRIES = parseInt(process.env.MAX_RETRIES || '5');
 const BASE_RETRY_DELAY = parseInt(process.env.BASE_RETRY_DELAY || '5000');
@@ -268,6 +269,7 @@ function setupClientEventHandlers(client: Client) {
 
     client.on('ready', () => {
         console.log('✓ Client is ready!');
+        isReady = true;
         initializationAttempt = 0;
     });
 
@@ -305,6 +307,7 @@ function setupClientEventHandlers(client: Client) {
 
     client.on('disconnected', async (reason) => {
         console.log('✗ Client was logged out:', reason);
+        isReady = false;
 
         if (!isShuttingDown && initializationAttempt < MAX_RETRIES) {
             console.log('Attempting to reconnect...');
@@ -318,3 +321,87 @@ initializeWithRetry().catch(error => {
     console.error('Fatal error during initialization:', error);
     process.exit(1);
 });
+
+// HTTP Server for API endpoints
+const PORT = parseInt(process.env.PORT || '3000');
+
+const server = Bun.serve({
+    port: PORT,
+    async fetch(request: Request): Promise<Response> {
+        const url = new URL(request.url);
+
+        // Health check endpoint
+        if (url.pathname === '/health') {
+            return new Response(JSON.stringify({
+                status: 'ok',
+                whatsapp: isReady ? 'connected' : 'disconnected'
+            }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Send message endpoint
+        if (url.pathname === '/send' && request.method === 'POST') {
+            try {
+                const body = await request.json() as { target?: string; message?: string };
+                const { target, message } = body;
+
+                if (!target || !message) {
+                    return new Response(JSON.stringify({
+                        error: 'Missing required fields: target and message'
+                    }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                if (!isReady || !client) {
+                    return new Response(JSON.stringify({
+                        error: 'WhatsApp client not ready. Please scan QR code first.'
+                    }), {
+                        status: 503,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                const cleanNumber = target.replace(/\D/g, '');
+                const chatId = `${cleanNumber}@c.us`;
+
+                const result = await client.sendMessage(chatId, message);
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    messageId: result.id._serialized,
+                    to: target,
+                    message: message
+                }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+            } catch (error: any) {
+                console.error('Error sending message:', error);
+                return new Response(JSON.stringify({
+                    error: 'Failed to send message',
+                    details: error?.message || 'Unknown error'
+                }), {
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
+        // 404 for other routes
+        return new Response(JSON.stringify({
+            error: 'Not found',
+            endpoints: {
+                'GET /health': 'Check server and WhatsApp status',
+                'POST /send': 'Send WhatsApp message (body: { target, message })'
+            }
+        }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+});
+
+console.log(`Server running at http://localhost:${server.port}`);
