@@ -367,6 +367,18 @@ const server = Bun.serve({
                 const cleanNumber = target.replace(/\D/g, '');
                 const chatId = `${cleanNumber}@c.us`;
 
+                // Verify number exists on WhatsApp
+                const isRegistered = await client.isRegisteredUser(chatId);
+                if (!isRegistered) {
+                    return new Response(JSON.stringify({
+                        error: 'Number not registered on WhatsApp',
+                        target: target
+                    }), {
+                        status: 404,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
                 const result = await client.sendMessage(chatId, message);
 
                 return new Response(JSON.stringify({
