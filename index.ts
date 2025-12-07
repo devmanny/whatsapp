@@ -297,6 +297,16 @@ function setupClientEventHandlers(client: Client) {
         }
     });
 
+    client.on('message_ack', async (msg, ack) => {
+        // ack: 0=pending, 1=server, 2=delivered, 3=read, 4=played
+        if (ack === 3) {
+            const time = getMexicoCityTime();
+            const to = msg.to || 'Unknown';
+            const preview = msg.body?.substring(0, 50) || '[media]';
+            console.log(`[${time}] [LEÍDO] ${to}: ${preview}${msg.body?.length > 50 ? '...' : ''}`);
+        }
+    });
+
     client.on('authenticated', () => {
         console.log('✓ AUTHENTICATED');
     });
