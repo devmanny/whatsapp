@@ -374,8 +374,19 @@ const server = Bun.serve({
                     });
                 }
 
-                const cleanNumber = target.replace(/\D/g, '');
-                const chatId = `${cleanNumber}@c.us`;
+                // Support both individual chats (@c.us) and groups (@g.us)
+                let chatId: string;
+                if (target.includes('@g.us') || target.includes('@c.us')) {
+                    // Already formatted chat ID
+                    chatId = target;
+                } else if (target.length > 15 && /^\d+$/.test(target)) {
+                    // Long numeric ID = group
+                    chatId = `${target}@g.us`;
+                } else {
+                    // Phone number = individual chat
+                    const cleanNumber = target.replace(/\D/g, '');
+                    chatId = `${cleanNumber}@c.us`;
+                }
 
                 const result = await client.sendMessage(chatId, message);
 
@@ -400,12 +411,64 @@ const server = Bun.serve({
             }
         }
 
+        // Send message to group endpoint
+        if (url.pathname === '/send-group' && request.method === 'POST') {
+            try {
+                const body = await request.json() as { groupId?: string; message?: string };
+                const { groupId, message } = body;
+
+                if (!groupId || !message) {
+                    return new Response(JSON.stringify({
+                        error: 'Missing required fields: groupId and message'
+                    }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                if (!isReady || !client) {
+                    return new Response(JSON.stringify({
+                        error: 'WhatsApp client not ready. Please scan QR code first.'
+                    }), {
+                        status: 503,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                // Format: groupId@g.us
+                const chatId = groupId.includes('@g.us') ? groupId : `${groupId}@g.us`;
+
+                console.log(`Sending message to group: ${chatId}`);
+                const result = await client.sendMessage(chatId, message);
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    messageId: result.id._serialized,
+                    to: chatId,
+                    message: message
+                }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+            } catch (error: any) {
+                console.error('Error sending group message:', error);
+                return new Response(JSON.stringify({
+                    error: 'Failed to send group message',
+                    details: error?.message || 'Unknown error'
+                }), {
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
         // 404 for other routes
         return new Response(JSON.stringify({
             error: 'Not found',
             endpoints: {
                 'GET /health': 'Check server and WhatsApp status',
-                'POST /send': 'Send WhatsApp message (body: { target, message })'
+                'POST /send': 'Send WhatsApp message (body: { target, message })',
+                'POST /send-group': 'Send message to group (body: { groupId, message })'
             }
         }), {
             status: 404,
