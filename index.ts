@@ -1,4 +1,4 @@
-import { Client, LocalAuth, Message } from 'whatsapp-web.js';
+import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js';
 import { unlinkSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -462,13 +462,89 @@ const server = Bun.serve({
             }
         }
 
+        // Send PDF catalog endpoint
+        if (url.pathname === '/send-pdf' && request.method === 'POST') {
+            try {
+                const body = await request.json() as { target?: string; caption?: string };
+                const { target, caption } = body;
+
+                if (!target) {
+                    return new Response(JSON.stringify({
+                        error: 'Missing required field: target'
+                    }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                if (!isReady || !client) {
+                    return new Response(JSON.stringify({
+                        error: 'WhatsApp client not ready. Please scan QR code first.'
+                    }), {
+                        status: 503,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                // Support both individual chats (@c.us) and groups (@g.us)
+                let chatId: string;
+                if (target.includes('@g.us') || target.includes('@c.us')) {
+                    chatId = target;
+                } else if (target.length > 15 && /^\d+$/.test(target)) {
+                    chatId = `${target}@g.us`;
+                } else {
+                    const cleanNumber = target.replace(/\D/g, '');
+                    chatId = `${cleanNumber}@c.us`;
+                }
+
+                const pdfPath = join(import.meta.dir, 'GFB Catálogo.pdf');
+
+                if (!existsSync(pdfPath)) {
+                    return new Response(JSON.stringify({
+                        error: 'PDF file not found',
+                        path: pdfPath
+                    }), {
+                        status: 500,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
+
+                const media = MessageMedia.fromFilePath(pdfPath);
+
+                console.log(`Sending PDF to: ${chatId}`);
+                const result = await client.sendMessage(chatId, media, {
+                    caption: caption || ''
+                });
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    messageId: result.id._serialized,
+                    to: target,
+                    filename: 'GFB Catálogo.pdf'
+                }), {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+            } catch (error: any) {
+                console.error('Error sending PDF:', error);
+                return new Response(JSON.stringify({
+                    error: 'Failed to send PDF',
+                    details: error?.message || 'Unknown error'
+                }), {
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
         // 404 for other routes
         return new Response(JSON.stringify({
             error: 'Not found',
             endpoints: {
                 'GET /health': 'Check server and WhatsApp status',
                 'POST /send': 'Send WhatsApp message (body: { target, message })',
-                'POST /send-group': 'Send message to group (body: { groupId, message })'
+                'POST /send-group': 'Send message to group (body: { groupId, message })',
+                'POST /send-pdf': 'Send PDF catalog (body: { target, caption? })'
             }
         }), {
             status: 404,
