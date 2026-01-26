@@ -274,20 +274,44 @@ function setupClientEventHandlers(client: Client) {
     });
 
     client.on('message', async (msg) => {
-        await logMessage(msg, 'RECIBIDO');
+        try {
+            await logMessage(msg, 'RECIBIDO');
+        } catch (logError) {
+            // Don't let logging errors affect message processing
+        }
 
         if (!msg.body || msg.body.trim() === '') {
             return;
         }
 
+        // Helper to send reply with fallback
+        const safeReply = async (text: string) => {
+            try {
+                await msg.reply(text);
+            } catch (replyError: any) {
+                // If reply fails (e.g., sendSeen error), try direct send
+                const errorMsg = replyError?.message || '';
+                if (errorMsg.includes('No LID for user') || errorMsg.includes('markedUnread')) {
+                    console.log(`Reply failed for ${msg.from}, trying direct send...`);
+                    try {
+                        await client.sendMessage(msg.from, text);
+                    } catch (sendError) {
+                        console.error(`Failed to send message to ${msg.from}:`, sendError);
+                    }
+                } else {
+                    console.error(`Reply failed:`, replyError);
+                }
+            }
+        };
+
         if (msg.body === '!ping') {
-            await msg.reply('pong');
+            await safeReply('pong');
             return;
         }
 
         const zodiacEmojis = detectZodiacSigns(msg.body);
         if (zodiacEmojis.length > 0) {
-            await msg.reply(zodiacEmojis.join(' '));
+            await safeReply(zodiacEmojis.join(' '));
         }
     });
 
