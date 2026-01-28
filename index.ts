@@ -284,23 +284,11 @@ function setupClientEventHandlers(client: Client) {
             return;
         }
 
-        // Helper to send reply with fallback
         const safeReply = async (text: string) => {
             try {
-                await msg.reply(text);
-            } catch (replyError: any) {
-                // If reply fails (e.g., sendSeen error), try direct send
-                const errorMsg = replyError?.message || '';
-                if (errorMsg.includes('No LID for user') || errorMsg.includes('markedUnread')) {
-                    console.log(`Reply failed for ${msg.from}, trying direct send...`);
-                    try {
-                        await client.sendMessage(msg.from, text);
-                    } catch (sendError) {
-                        console.error(`Failed to send message to ${msg.from}:`, sendError);
-                    }
-                } else {
-                    console.error(`Reply failed:`, replyError);
-                }
+                await client!.sendMessage(msg.from, text, { sendSeen: false });
+            } catch (error: any) {
+                console.error(`Failed to send message to ${msg.from}:`, error?.message || error);
             }
         };
 
@@ -412,7 +400,7 @@ const server = Bun.serve({
                     chatId = `${cleanNumber}@c.us`;
                 }
 
-                const result = await client.sendMessage(chatId, message);
+                const result = await client.sendMessage(chatId, message, { sendSeen: false });
 
                 return new Response(JSON.stringify({
                     success: true,
@@ -424,7 +412,7 @@ const server = Bun.serve({
                 });
 
             } catch (error: any) {
-                console.error('Error sending message:', error);
+                console.error('Error sending message:', error?.message || error);
                 return new Response(JSON.stringify({
                     error: 'Failed to send message',
                     details: error?.message || 'Unknown error'
@@ -463,7 +451,7 @@ const server = Bun.serve({
                 const chatId = groupId.includes('@g.us') ? groupId : `${groupId}@g.us`;
 
                 console.log(`Sending message to group: ${chatId}`);
-                const result = await client.sendMessage(chatId, message);
+                const result = await client.sendMessage(chatId, message, { sendSeen: false });
 
                 return new Response(JSON.stringify({
                     success: true,
@@ -475,7 +463,7 @@ const server = Bun.serve({
                 });
 
             } catch (error: any) {
-                console.error('Error sending group message:', error);
+                console.error('Error sending group message:', error?.message || error);
                 return new Response(JSON.stringify({
                     error: 'Failed to send group message',
                     details: error?.message || 'Unknown error'
@@ -537,7 +525,8 @@ const server = Bun.serve({
 
                 console.log(`Sending PDF to: ${chatId}`);
                 const result = await client.sendMessage(chatId, media, {
-                    caption: caption || ''
+                    caption: caption || '',
+                    sendSeen: false
                 });
 
                 return new Response(JSON.stringify({
@@ -550,7 +539,7 @@ const server = Bun.serve({
                 });
 
             } catch (error: any) {
-                console.error('Error sending PDF:', error);
+                console.error('Error sending PDF:', error?.message || error);
                 return new Response(JSON.stringify({
                     error: 'Failed to send PDF',
                     details: error?.message || 'Unknown error'
