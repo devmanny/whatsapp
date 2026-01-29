@@ -321,6 +321,12 @@ function setupClientEventHandlers(client: Client) {
 
     client.on('authenticated', () => {
         console.log('✓ AUTHENTICATED');
+        // Mark as ready after auth since the 'ready' event sometimes doesn't fire
+        if (!isReady) {
+            isReady = true;
+            initializationAttempt = 0;
+            console.log('✓ Marked as ready (from authenticated event)');
+        }
     });
 
     client.on('auth_failure', (msg) => {
