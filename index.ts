@@ -199,6 +199,12 @@ function detectZodiacSigns(text: string): string[] {
         .map(m => m.emoji);
 }
 
+function normalizeMexicanNumber(input: string): string {
+    const digits = input.replace(/\D/g, '');
+    const last10 = digits.slice(-10);
+    return `521${last10}`;
+}
+
 async function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -392,18 +398,13 @@ const server = Bun.serve({
                     });
                 }
 
-                // Support both individual chats (@c.us) and groups (@g.us)
                 let chatId: string;
                 if (target.includes('@g.us') || target.includes('@c.us')) {
-                    // Already formatted chat ID
                     chatId = target;
                 } else if (target.length > 15 && /^\d+$/.test(target)) {
-                    // Long numeric ID = group
                     chatId = `${target}@g.us`;
                 } else {
-                    // Phone number = individual chat
-                    const cleanNumber = target.replace(/\D/g, '');
-                    chatId = `${cleanNumber}@c.us`;
+                    chatId = `${normalizeMexicanNumber(target)}@c.us`;
                 }
 
                 const result = await client.sendMessage(chatId, message, { sendSeen: false });
@@ -504,15 +505,13 @@ const server = Bun.serve({
                     });
                 }
 
-                // Support both individual chats (@c.us) and groups (@g.us)
                 let chatId: string;
                 if (target.includes('@g.us') || target.includes('@c.us')) {
                     chatId = target;
                 } else if (target.length > 15 && /^\d+$/.test(target)) {
                     chatId = `${target}@g.us`;
                 } else {
-                    const cleanNumber = target.replace(/\D/g, '');
-                    chatId = `${cleanNumber}@c.us`;
+                    chatId = `${normalizeMexicanNumber(target)}@c.us`;
                 }
 
                 const pdfPath = join(import.meta.dir, 'GFB Catálogo.pdf');
